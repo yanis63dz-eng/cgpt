@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { bundles, gallery, uses, steps, impact, faqs, included, money } from './data.js';
 import './styles.css';
 
+const asset = path => `${import.meta.env.BASE_URL}${path}`;
+
 function Icon({ name, size = 24, ...props }) {
   const paths = {
     menu: <><path d="M4 6h16M4 12h16M4 18h16" /></>,
@@ -32,7 +34,7 @@ function Photo({ src, cell, alt, className = '', eager = false }) {
   const sprite = Number.isInteger(cell);
   return <div className={`photo ${sprite ? 'sprite' : ''} ${className}`}>
     <div className="photo-frame">
-      <img src={`/images/${src}`} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchPriority={eager ? 'high' : 'auto'}
+      <img src={asset(`images/${src}`)} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" fetchPriority={eager ? 'high' : 'auto'}
         style={sprite ? { left: `${-(cell % 2) * 100}%`, top: `${-Math.floor(cell / 2) * 100}%` } : undefined} />
     </div>
   </div>;
@@ -101,7 +103,7 @@ function ProductForm({ selected, setSelected, threads, setThreads, onAdd, formRe
       <div className="addon-title"><span />Behöver du fler färger att skapa med?<span /></div>
       <label className={`thread-addon ${threads ? 'is-selected' : ''}`}>
         <input type="checkbox" checked={threads} onChange={e => setThreads(e.target.checked)} /><span className="checkbox-mark">{threads && <Icon name="check" size={17} />}</span>
-        <img src="/images/threads.png" alt="24 färgtrådar i dämpade nyanser" width="72" height="72" />
+        <img src={asset('images/threads.png')} alt="24 färgtrådar i dämpade nyanser" width="72" height="72" />
         <strong>Manveo Färgtrådar™<br /><span>– 24 färger</span></strong><span className="addon-price">99 kr<del>149 kr</del></span>
       </label>
       <button className="button primary add-to-cart" type="submit"><span>Lägg i kundvagn</span><Icon name="arrow" size={20} /></button>
@@ -149,7 +151,7 @@ function Editorial() {
     </section>
     <section className="before-after-section section soft-section">
       <header className="section-heading centered"><Kicker>Före & efter</Kicker><h2>Från hål till något vackert</h2><p>En sliten omtyckt tröja behöver inte slängas. Gör lagningen till en del av plagget och skapa något som känns personligt på riktigt.</p></header>
-      <div className="comparison"><img src="/images/before-after.png" alt="Samma salviagröna tröja före lagning med hål, och efter med en ton-i-ton-vävd lagning" loading="lazy" /><div className="comparison-labels"><span>FÖRE</span><span>EFTER</span></div></div>
+      <div className="comparison"><img src={asset('images/before-after.png')} alt="Samma salviagröna tröja före lagning med hål, och efter med en ton-i-ton-vävd lagning" loading="lazy" /><div className="comparison-labels"><span>FÖRE</span><span>EFTER</span></div></div>
     </section>
     <section className="section split-story creativity">
       <div className="story-copy"><Kicker>Skapa fritt</Kicker><h2>Låt fantasin flöda</h2><p>Du behöver inte laga hål för att använda Manveo. Välj dina favoritfärger och börja skapa! Väv en blomma på tröjan, ett färgglatt mönster på jeansen eller något helt eget. Det roliga är att se din idé växa fram rad för rad.</p><div className="color-palette" aria-label="Färginspiration: salvia, terrakotta, gräddvitt, blått och rosa"><i /><i /><i /><i /><i /><span>Dina färger. Ditt uttryck.</span></div></div>
@@ -224,7 +226,7 @@ function Cart({ cart, setCart, onClose }) {
   };
   return <><div className="cart-content">{cart.length === 0 ? <div className="empty-cart"><Icon name="bag" size={48} /><h3>Din nästa kreativa stund börjar här.</h3><p>Din kundvagn är tom just nu.</p><button className="button primary" onClick={onClose}>Upptäck Manveo <Icon name="arrow" size={18} /></button></div> : <>
     <p className="cart-assurance"><Icon name="check" size={16} />Ett steg närmare något personligt.</p>
-    {cart.map(item => { const product = cartProduct(item.id); return <article className="cart-item" key={item.id}><img src={`/images/${product.src}`} alt={product.name} /><div className="cart-item-details"><h3>{product.name}</h3><p>{product.detail}</p><div className="cart-item-actions"><div className="quantity"><button onClick={() => update(item.id, -1)} aria-label={`Minska antal ${product.name}`}><Icon name="minus" size={14} /></button><span aria-label="Antal">{item.quantity}</span><button onClick={() => update(item.id, 1)} disabled={item.quantity >= 99} aria-label={`Öka antal ${product.name}`}><Icon name="plus" size={14} /></button></div><strong>{money(product.price * item.quantity)}</strong><button className="remove-item" aria-label={`Ta bort ${product.name}`} onClick={() => update(item.id, -item.quantity)}><Icon name="trash" size={17} /></button></div></div></article>; })}
+    {cart.map(item => { const product = cartProduct(item.id); return <article className="cart-item" key={item.id}><img src={asset(`images/${product.src}`)} alt={product.name} /><div className="cart-item-details"><h3>{product.name}</h3><p>{product.detail}</p><div className="cart-item-actions"><div className="quantity"><button onClick={() => update(item.id, -1)} aria-label={`Minska antal ${product.name}`}><Icon name="minus" size={14} /></button><span aria-label="Antal">{item.quantity}</span><button onClick={() => update(item.id, 1)} disabled={item.quantity >= 99} aria-label={`Öka antal ${product.name}`}><Icon name="plus" size={14} /></button></div><strong>{money(product.price * item.quantity)}</strong><button className="remove-item" aria-label={`Ta bort ${product.name}`} onClick={() => update(item.id, -item.quantity)}><Icon name="trash" size={17} /></button></div></div></article>; })}
   </>}</div>{cart.length > 0 && <div className="cart-bottom"><div className="cart-subtotal"><span>Delsumma</span><strong>{money(total)}</strong></div><p>Frakt och eventuella rabatter visas i kassan.</p><button className="button primary" onClick={checkout} disabled={busy}>{busy ? 'Öppnar kassan…' : 'Gå till kassan'}<Icon name="lock" size={18} /></button>{status && <p className="checkout-status" role="status">{status}</p>}<button className="continue-shopping" onClick={onClose}>Fortsätt handla</button></div>}</>;
 }
 

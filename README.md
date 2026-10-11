@@ -2,7 +2,17 @@
 
 Page produit responsive en suédois, reconstruite en React à partir du PDF fourni de la page Knitla. Identité Manveo, visuels originaux dans une palette noir, crème, bois, sauge et terre cuite. Aucun avis client ni visage humain.
 
-## Démarrer
+## Voir la page sans installer de logiciel
+
+1. Sur la branche `manveo` de GitHub, choisir **Code → Download ZIP**.
+2. **Extraire entièrement le ZIP** dans un dossier.
+3. Double-cliquer sur **`index.html`** : il ouvre automatiquement **`manveo.html`**, la version prête à consulter. On peut également ouvrir `manveo.html` directement.
+
+Conserver le dossier `public` à côté de ces fichiers : il contient les images. La page fonctionne sans serveur, sans npm et sans connexion Internet. La galerie, les carrousels, la FAQ et le panier restent interactifs. Aucune commande ni paiement réel n’est envoyé depuis cette version locale.
+
+Le fichier `manveo.html` est généré et inclus dans le dépôt pour rendre le téléchargement utilisable immédiatement. Les changements du code source nécessitent `npm run build` pour le régénérer. Les scripts et les polices sont intégrés au HTML ; les images restent dans `public/images/`.
+
+## Développer le projet
 
 Node.js 22.12+ ou 24 et npm.
 
@@ -18,7 +28,9 @@ npm run preview -- --port 4173
 npm test
 ```
 
-Les tests ouvrent Chromium, démarrent leur propre serveur de prévisualisation et le ferment à la fin. Exécuter `npm run build` avant `npm test`. Par défaut Chromium est recherché à `/usr/bin/chromium`; utiliser `CHROMIUM_PATH` pour une autre installation. Les captures sont enregistrées dans `test-results/`.
+Les tests ouvrent Chromium, démarrent leurs propres serveurs de prévisualisation et les ferment à la fin. Ils vérifient aussi les documents portables compilés, leurs images, leurs interactions, l’absence de ressources externes et la redirection locale. Le test direct de l’URL `file://` est signalé comme ignoré si la politique administrateur de Chromium le bloque, comme dans cet environnement cloud ; cette restriction n’est pas contournée. Exécuter `npm run build` avant `npm test`. Par défaut Chromium est recherché à `/usr/bin/chromium`; utiliser `CHROMIUM_PATH` pour une autre installation. Les captures sont enregistrées dans `test-results/`.
+
+Pour héberger le site, publier le contenu de `dist/`, généré par `npm run build`. Les chemins des assets sont relatifs et fonctionnent également dans un sous-dossier. Le lien du dépôt GitHub est un accès au code, pas une adresse de site publié.
 
 ## Fonctionnalités
 
@@ -51,6 +63,7 @@ Configurer `VITE_CHECKOUT_ENDPOINT` (voir `.env.example`) avec un backend de pai
 ## Fichiers
 
 - `src/main.jsx` : composants et interactions.
+- `manveo.html` : version directement ouvrable, générée par `scripts/build-portable.mjs`.
 - `src/data.js` : textes, offres et cartes de carrousel.
 - `src/styles.css` : mise en page desktop/mobile.
 - `public/images/` : nouveaux visuels Manveo. Les planches de quatre photos sont affichées individuellement par cadrage CSS.

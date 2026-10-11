@@ -1,7 +1,11 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { resolve, extname } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createServer } from 'node:http';
+import { runInNewContext } from 'node:vm';
 
 // Run against a production build, with a server owned and stopped by this test.
 const port = 4178;
@@ -11,6 +15,7 @@ let serverLog = '';
 server.stdout.on('data', value => { serverLog += value; });
 server.stderr.on('data', value => { serverLog += value; });
 let browser;
+let portableServer;
 let passed = 0;
 const errors = [];
 const check = (condition, label) => { assert.ok(condition, label); passed++; console.log(`PASS ${passed}: ${label}`); };
@@ -136,9 +141,84 @@ try {
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByRole('button', { name: /Öppna kundvagn/ }).click();
   check(await page.locator('.empty-cart').isVisible(), 'Invalid stored cart data is safely rejected');
+  // Verify the actual file:// path when the browser permits it. Managed cloud
+  // Chromium blocks that scheme; keep its policy and report the check as skipped.
+  const fileContext = await browser.newContext({ offline: true });
+  const filePage = await fileContext.newPage();
+  try {
+    await filePage.goto(pathToFileURL(resolve('index.html')).href);
+    await filePage.waitForURL(/\/manveo\.html$/);
+    await filePage.locator('h1').waitFor();
+    check((await filePage.locator('h1').innerText()).includes('Manveo'), 'Double-click entry opens the portable page over file://');
+  } catch (error) {
+    if (!error.message.includes('ERR_BLOCKED_BY_ADMINISTRATOR')) throw error;
+    console.log('SKIP: Direct file:// browser navigation is blocked by the cloud administrator; portable-page and redirect checks follow.');
+  } finally {
+    await fileContext.close();
+  }
+  for (const entry of ['index.html', 'dist/index.html']) {
+    const html = await readFile(entry, 'utf8');
+    const redirect = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+    let destination;
+    const location = { protocol: 'file:', href: pathToFileURL(resolve(entry)).href, hash: '#fragor', replace: url => { destination = url; } };
+    runInNewContext(redirect, { location, URL });
+    check(destination === new URL('./manveo.html#fragor', location.href).href, `${entry} redirects local openings to the portable file and preserves the anchor`);
+    destination = null;
+    runInNewContext(redirect, { location: { ...location, protocol: 'https:' }, URL });
+    check(destination === null, `${entry} does not redirect the hosted application`);
+  }
+  // Serve only the downloadable artifacts, with ordinary HTTP. This exercises
+  // the committed HTML without Vite compiling it or a source-code server.
+  const portableFiles = new Map([
+    ['/manveo.html', resolve('manveo.html')],
+    ['/public/favicon.svg', resolve('public/favicon.svg')],
+    ...(await readdir('public/images')).map(name => [`/public/images/${name}`, resolve('public/images', name)]),
+  ]);
+  portableServer = createServer(async (request, response) => {
+    const file = portableFiles.get(new URL(request.url, 'http://127.0.0.1').pathname);
+    if (!file) { response.writeHead(404); response.end(); return; }
+    try {
+      const bytes = await readFile(file);
+      response.writeHead(200, { 'Content-Type': { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml' }[extname(file)] });
+      response.end(bytes);
+    } catch { response.writeHead(500); response.end(); }
+  });
+  await new Promise(resolve => portableServer.listen(0, '127.0.0.1', resolve));
+  const portableOrigin = `http://127.0.0.1:${portableServer.address().port}`;
+  const portableContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const localPage = await portableContext.newPage();
+  const localErrors = [];
+  const remoteRequests = [];
+  localPage.on('pageerror', error => localErrors.push(error.message));
+  localPage.on('request', request => {
+    if (/^https?:/.test(request.url()) && !request.url().startsWith(`${portableOrigin}/`) && !request.url().startsWith(`${origin}/`)) remoteRequests.push(request.url());
+  });
+  localPage.on('response', response => { if (response.status() >= 400) localErrors.push(`${response.status()} ${response.url()}`); });
+  for (const [entry, url] of [['manveo.html', `${portableOrigin}/manveo.html`], ['dist/manveo.html', `${origin}/manveo.html`]]) {
+    await localPage.goto(url);
+    await localPage.locator('h1').waitFor();
+    check((await localPage.locator('h1').innerText()).includes('Manveo'), `${entry} renders as a precompiled static document`);
+    check(await localPage.locator('script[type="module"], script[src]').count() === 0, `${entry} needs no external JavaScript modules`);
+    await localPage.locator('main img').evaluateAll(images => images.forEach(image => { image.loading = 'eager'; }));
+    await waitFor(() => localPage.locator('main img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), `${entry} local images load`);
+    check(true, `${entry} loads every packaged image`);
+    await localPage.locator('.gallery-thumbnails button').nth(2).click();
+    check((await localPage.locator('.gallery-count').innerText()) === '3 / 6', `${entry} gallery is interactive`);
+    await localPage.locator('.bundle').nth(1).click();
+    await localPage.locator('form .add-to-cart').click();
+    check(await localPage.locator('.cart-item').count() > 0, `${entry} cart opens`);
+    await localPage.keyboard.press('Escape');
+    await localPage.locator('.faq-list summary').first().click();
+    check(await localPage.locator('.faq-list details').first().getAttribute('open') !== null, `${entry} FAQ works`);
+    await localPage.evaluate(() => { try { localStorage.clear(); } catch {} });
+  }
+  check(localErrors.length === 0, `No errors in portable documents: ${localErrors.join('; ')}`);
+  check(remoteRequests.length === 0, 'Portable documents do not request external resources');
+  await portableContext.close();
   check(errors.length === 0, `No browser errors or failed HTTP requests: ${errors.join('; ')}`);
   console.log(`\n${passed} checks passed. Screenshots: test-results/desktop.png, test-results/mobile.png`);
 } finally {
   if (browser) await browser.close();
+  if (portableServer) await new Promise(resolve => portableServer.close(resolve));
   server.kill('SIGTERM');
 }
